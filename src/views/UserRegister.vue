@@ -3,7 +3,7 @@
       <v-card class="mx-auto" max-width="400">
         <v-card-title>Registro</v-card-title>
         <v-card-text>
-          <v-form>
+          <v-form  @keydown.enter="register">
             <v-text-field v-model="name" label="Nombre" required></v-text-field>
             <v-text-field v-model="email" label="Correo" required></v-text-field>
             <v-text-field
@@ -19,6 +19,7 @@
               required
             ></v-text-field>
             <v-btn color="primary" block @click="register">Registrar</v-btn>
+            <v-btn color="secundary" block @click="login">atras</v-btn>
           </v-form>
         </v-card-text>
       </v-card>
@@ -39,7 +40,9 @@
       const password = ref("");
       const confirmPassword = ref("");
       const router = useRouter();
-  
+      const login = async () => {
+        router.push("/login");
+      }
       const register = async () => {
         if (password.value !== confirmPassword.value) {
           alert("Las contraseñas no coinciden.");
@@ -66,7 +69,7 @@
         }
       };
   
-      return { email, name, password, confirmPassword, register };
+      return { email, name, password, confirmPassword, register , login };
     },
   };
   </script>

@@ -12,6 +12,7 @@
           <v-list-item @click="goTo('/user')">Usuario</v-list-item>
           <v-list-item @click="goTo('/minerals')">Minerales</v-list-item>
           <v-list-item @click="goTo('/library')">Biblioteca</v-list-item>
+          <v-list-item @click="goTo('/periodica')">Tabla Periodica</v-list-item>
           <v-list-item @click="logout">Cerrar Sesión</v-list-item>
         </v-list>
       </v-navigation-drawer>

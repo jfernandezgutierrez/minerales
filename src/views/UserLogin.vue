@@ -3,7 +3,7 @@
       <v-card class="mx-auto" max-width="400">
         <v-card-title>Iniciar Sesión</v-card-title>
         <v-card-text>
-          <v-form>
+          <v-form  @keydown.enter="login">
             <v-text-field v-model="email" label="Correo" required></v-text-field>
             <v-text-field
               v-model="password"
