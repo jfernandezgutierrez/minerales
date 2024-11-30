@@ -2,23 +2,20 @@
   <v-container>
     <!-- Botón para abrir el modal -->
     <v-btn color="primary" class="mb-4" @click="dialog = true">Añadir Mineral</v-btn>
-
-    <!-- Chips de filtrado en la biblioteca -->
-    <v-chip-group
-      v-model="selectedGroupLibrary"
-      class="mb-4"
-      column
-    >
+    
+    <!-- Chips para filtrar por grupo en la biblioteca -->
+    <div class="chips-group mb-4">
       <v-chip
         v-for="group in allGroupsLibrary"
         :key="group"
-        @click="filterLibraryByGroup(group)"
-        :active="selectedGroupLibrary === group"
         class="mr-2"
+        :color="activeGroupLibrary === group ? 'primary' : ''"
+        @click="filterLibraryByGroup(group)"
       >
         {{ group }}
       </v-chip>
-    </v-chip-group>
+    </div>
+    
 
     <!-- Campo de búsqueda en la biblioteca -->
     <v-text-field
@@ -27,42 +24,45 @@
       class="mb-4"
     ></v-text-field>
 
-    <!-- Lista de minerales del usuario -->
-    <div v-for="(groupedMinerals, group) in groupedLibrary" :key="group">
+    <!-- Lista de minerales agrupados -->
+    <div v-for="(groupedMinerals, group) in groupedLibrary" :key="group" class="group-section">
       <h3>{{ group }}</h3>
       <div class="minerals-list">
-        <div
+        <v-card
           v-for="mineral in groupedMinerals"
           :key="mineral.Nombre_Científico"
           class="mineral-card"
+
+          @click="selectMineral(mineral)"
         >
-          <h4>{{ mineral.Nombre_Científico }}</h4>
-          <p>{{ mineral.Fórmula_Química }}</p>
-        </div>
+          <v-card-title>{{ mineral.Nombre_Científico }}</v-card-title>
+          <v-card-subtitle>{{ mineral.Fórmula_Química }}</v-card-subtitle>
+        </v-card>
       </div>
     </div>
 
     <!-- Modal para añadir minerales -->
     <v-dialog v-model="dialog" max-width="800px">
       <v-card>
-        <v-card-title class="text-h5">Añadir Mineral desde Base de Datos</v-card-title>
+        <v-card-title class="text-h5">
+      Añadir Mineral
+      <v-btn icon class="close-btn" @click="dialog = false">
+        <v-icon>mdi-close</v-icon>
+      </v-btn>
+    </v-card-title>
         <v-card-text>
           <!-- Chips de filtrado en el modal -->
-          <v-chip-group
-            v-model="selectedGroupModal"
-            class="mb-4"
-            column
-          >
+          <div class="chips-group mb-4">
             <v-chip
               v-for="group in allGroupsModal"
               :key="group"
-              @click="filterModalByGroup(group)"
-              :active="selectedGroupModal === group"
               class="mr-2"
+              :color="activeGroupModal === group ? 'primary' : ''"
+              @click="filterModalByGroup(group)"
             >
               {{ group }}
             </v-chip>
-          </v-chip-group>
+            </div>
 
           <!-- Campo de búsqueda en el modal -->
           <v-text-field
@@ -71,27 +71,52 @@
             class="mb-4"
           ></v-text-field>
 
-          <!-- Lista de minerales en el modal -->
-          <div v-for="(groupedMinerals, group) in groupedModal" :key="group">
+          <!-- Lista de minerales agrupados en el modal -->
+          <div v-for="(groupedMinerals, group) in groupedModal" :key="group" class="group-section">
             <h3>{{ group }}</h3>
             <div class="minerals-list">
-              <div
+              <v-card
                 v-for="mineral in groupedMinerals"
                 :key="mineral.Nombre_Científico"
                 class="mineral-card"
                 @click="addMineralToLibrary(mineral)"
               >
-                <h4>{{ mineral.Nombre_Científico }}</h4>
-                <p>{{ mineral.Fórmula_Química }}</p>
-              </div>
+                <v-card-title>{{ mineral.Nombre_Científico }}</v-card-title>
+                <v-card-subtitle>{{ mineral.Fórmula_Química }}</v-card-subtitle>
+              </v-card>
             </div>
           </div>
         </v-card-text>
+        
+      </v-card>
+    </v-dialog>
+     <!-- Modal para mostrar detalles del mineral -->
+     <v-dialog v-model="dialogDetails" max-width="600px">
+      <v-card>
+        <v-card-title>{{ selectedMineral?.Nombre_Científico }}</v-card-title>
+        <v-card-text>
+          <p><strong>Grupo:</strong> {{ selectedMineral?.Grupo }}</p>
+          <p><strong>Familia:</strong> {{ selectedMineral?.Familia }}</p>
+          <p><strong>Fórmula Química:</strong> {{ selectedMineral?.Fórmula_Química }}</p>
+          <p><strong>Color:</strong> {{ selectedMineral?.Color }}</p>
+          <p><strong>Dureza:</strong> {{ selectedMineral?.Dureza }}</p>
+        </v-card-text>
+        <div>
+    <img :src="selectedMineral?.imagen" alt="Imagen Base64" />
+  </div>
         <v-card-actions>
           <v-spacer></v-spacer>
-          <v-btn color="primary" text @click="dialog = false">Cerrar</v-btn>
+          <v-btn text @click="dialogDetails = false">Cerrar</v-btn>
         </v-card-actions>
+        <input
+    ref="fileInput"
+    type="file"
+    accept="image/*"
+    capture="camera"
+    @change="handleFileChange"
+  />
       </v-card>
+  
     </v-dialog>
   </v-container>
 </template>
@@ -100,113 +125,152 @@
 import { ref, computed, onMounted } from "vue";
 import { collection, getDocs, addDoc } from "firebase/firestore";
 import { db, auth } from "../firebase";
-
+import { query, where } from "firebase/firestore";
+import { updateDoc } from "firebase/firestore";
 export default {
   setup() {
     const library = ref([]); // Biblioteca del usuario
     const minerals = ref([]); // Todos los minerales descargados de la base de datos
     const filter = ref(""); // Filtro de la lista de la biblioteca del usuario
     const search = ref(""); // Filtro del modal de minerales
-    const dialog = ref(false); // Estado del modal
-    const selectedGroupLibrary = ref(null); // Grupo seleccionado en la biblioteca
-    const selectedGroupModal = ref(null); // Grupo seleccionado en el modal
-
+    const dialog = ref(false); // Estado del modal para añadir minerales
+    let activeGroupLibrary = ref("Todos"); // Grupo activo en la biblioteca
+    const activeGroupModal = ref("Todos"); // Grupo activo en el modal
+    const dialogDetails = ref(false); // Estado del modal de detalles del mineral
+    const selectedMineral = ref(null);
+    const fileInput = ref(null);
     // Obtener todos los grupos únicos en la biblioteca
     const allGroupsLibrary = computed(() => {
       const groups = library.value.map((mineral) => mineral.Grupo || "Desconocido");
-      return [...new Set(groups)];
+      return ["Todos", ...new Set(groups)];
     });
 
     // Obtener todos los grupos únicos en el modal
     const allGroupsModal = computed(() => {
       const groups = minerals.value.map((mineral) => mineral.Grupo || "Desconocido");
-      return [...new Set(groups)];
+      return ["Todos", ...new Set(groups)];
     });
 
-    // Agrupar los minerales de la biblioteca por grupo
+    // Agrupar los minerales en la biblioteca
     const groupedLibrary = computed(() => {
-      const filtered = library.value.filter(
-        (mineral) =>
-          (!selectedGroupLibrary.value || selectedGroupLibrary.value === mineral.Grupo) &&
-          mineral.Nombre_Científico.toLowerCase().includes(filter.value.toLowerCase())
-      );
-      return filtered.reduce((groups, mineral) => {
-        const group = mineral.Grupo || "Desconocido";
-        if (!groups[group]) groups[group] = [];
-        groups[group].push(mineral);
+      const grouped = library.value.reduce((groups, mineral) => {
+        if (!groups[mineral.Grupo]) groups[mineral.Grupo] = [];
+        groups[mineral.Grupo].push(mineral);
         return groups;
       }, {});
-    });
+console.log("hola");
 
-    // Agrupar los minerales en el modal por grupo
+      // Filtrar minerales según el grupo activo y el término de búsqueda
+      const result = {};
+      Object.keys(grouped).forEach((group) => {
+        if (activeGroupLibrary.value === "Todos" || activeGroupLibrary.value === group) {
+          const filtered = grouped[group].filter((mineral) =>
+            mineral.Nombre_Científico.toLowerCase().includes(filter.value.toLowerCase())
+          );
+          if (filtered.length > 0) {
+            result[group] = filtered;
+          }
+        }
+      });
+
+      return result;
+    });
+// Método para abrir la cámara o galería
+const openCamera = (mineral) => {
+  selectedMineral.value = mineral; // Asocia la imagen al mineral seleccionado
+  fileInput.value.click(); // Abre el selector de archivo o cámara
+};
+// Método para manejar el archivo seleccionado
+const handleFileChange = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  // Convierte la imagen a Base64
+  const base64 = await convertImageToBase64(file);
+
+  // Guarda la imagen asociada al mineral en Firestore
+  await saveImageToMineral(selectedMineral.value.Nombre_Científico, base64);
+
+  alert(`Imagen añadida al mineral: ${selectedMineral.value.Nombre_Científico}`);
+};
+// Convierte la imagen a Base64
+const convertImageToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (error) => reject(error);
+    reader.readAsDataURL(file);
+  });
+};
+const saveImageToMineral = async (nombreCientifico, base64) => {
+  const mineralsRef = collection(db, `minerales_${auth.currentUser.uid}`);
+  const q = query(mineralsRef, where("Nombre_Científico", "==", nombreCientifico));
+  const querySnapshot = await getDocs(q);
+
+  if (!querySnapshot.empty) {
+    const docRef = querySnapshot.docs[0].ref;
+    await updateDoc(docRef, { imagen: base64 }); // Agregar o actualizar el campo `imagen`
+  } else {
+    console.error("Mineral no encontrado en la colección.");
+  }
+};
+    // Agrupar los minerales en el modal
     const groupedModal = computed(() => {
-      const filtered = minerals.value.filter(
-        (mineral) =>
-          (!selectedGroupModal.value || selectedGroupModal.value === mineral.Grupo) &&
-          mineral.Nombre_Científico.toLowerCase().includes(search.value.toLowerCase())
-      );
-      return filtered.reduce((groups, mineral) => {
-        const group = mineral.Grupo || "Desconocido";
-        if (!groups[group]) groups[group] = [];
-        groups[group].push(mineral);
+      const grouped = minerals.value.reduce((groups, mineral) => {
+        if (!groups[mineral.Grupo]) groups[mineral.Grupo] = [];
+        groups[mineral.Grupo].push(mineral);
         return groups;
       }, {});
+
+      // Filtrar minerales según el grupo activo y el término de búsqueda
+      const result = {};
+      Object.keys(grouped).forEach((group) => {
+        if (activeGroupModal.value === "Todos" || activeGroupModal.value === group) {
+          const filtered = grouped[group].filter((mineral) =>
+            mineral.Nombre_Científico.toLowerCase().includes(search.value.toLowerCase())
+          );
+          if (filtered.length > 0) {
+            result[group] = filtered;
+          }
+        }
+      });
+
+      return result;
     });
 
-    // Obtener los minerales del usuario desde Firebase
+    // Cargar datos desde Firebase
     const fetchLibrary = async () => {
-      if (!auth.currentUser) {
-        alert("No estás autenticado. Por favor, inicia sesión.");
-        return;
-      }
-
+      if (!auth.currentUser) return;
       const userCollection = `minerales_${auth.currentUser.uid}`;
-      try {
-        const querySnapshot = await getDocs(collection(db, userCollection));
-        library.value = querySnapshot.docs.map((doc) => doc.data());
-      } catch (error) {
-        console.error("Error al cargar la biblioteca del usuario:", error);
-      }
+      const querySnapshot = await getDocs(collection(db, userCollection));
+      library.value = querySnapshot.docs.map((doc) => doc.data());
     };
-
-    // Obtener todos los minerales desde Firebase
+    const selectMineral = (mineral) => {
+      selectedMineral.value = mineral;
+      dialogDetails.value = true;
+    };
     const fetchMinerals = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "minerales"));
-        minerals.value = querySnapshot.docs.map((doc) => doc.data());
-      } catch (error) {
-        console.error("Error al cargar los minerales desde la base de datos:", error);
-      }
+      const querySnapshot = await getDocs(collection(db, "minerales"));
+      minerals.value = querySnapshot.docs.map((doc) => doc.data());
     };
 
-    // Agregar un mineral a la biblioteca del usuario
+    // Agregar mineral a la biblioteca
     const addMineralToLibrary = async (mineral) => {
-      if (!auth.currentUser) {
-        alert("No estás autenticado. Por favor, inicia sesión.");
-        return;
-      }
-
+      if (!auth.currentUser) return;
       const userCollection = `minerales_${auth.currentUser.uid}`;
-      try {
-        // Añadir el mineral a la base de datos del usuario
-        await addDoc(collection(db, userCollection), mineral);
-
-        // Añadir el mineral a la lista local de la biblioteca
-        library.value.push(mineral);
-
-        alert(`Mineral "${mineral.Nombre_Científico}" añadido con éxito.`);
-      } catch (error) {
-        console.error("Error al añadir el mineral:", error);
-        alert("Hubo un error al añadir el mineral.");
-      }
+      await addDoc(collection(db, userCollection), mineral);
+      library.value.push(mineral);
     };
 
     const filterLibraryByGroup = (group) => {
-      selectedGroupLibrary.value = group === selectedGroupLibrary.value ? null : group;
+      console.log("les");
+      activeGroupLibrary.value = group;
     };
 
     const filterModalByGroup = (group) => {
-      selectedGroupModal.value = group === selectedGroupModal.value ? null : group;
+      
+      
+      activeGroupModal.value = group;
     };
 
     onMounted(() => {
@@ -224,8 +288,13 @@ export default {
       groupedModal,
       allGroupsLibrary,
       allGroupsModal,
-      selectedGroupLibrary,
-      selectedGroupModal,
+      activeGroupLibrary,
+      activeGroupModal,
+      selectedMineral,
+      selectMineral,
+      openCamera,
+      handleFileChange,
+      dialogDetails,
       addMineralToLibrary,
       filterLibraryByGroup,
       filterModalByGroup,
@@ -235,6 +304,25 @@ export default {
 </script>
 
 <style>
+.camera-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: #000; /* Cambia el color si es necesario */
+}
+.d-none {
+  display: none;
+}
+.chips-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.group-section {
+  margin-bottom: 40px;
+}
+
 .minerals-list {
   display: flex;
   flex-wrap: wrap;
@@ -242,22 +330,19 @@ export default {
 }
 
 .mineral-card {
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  padding: 16px;
-  width: 250px;
-  text-align: center;
-  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+  width: 200px;
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .mineral-card:hover {
   transform: scale(1.05);
-  box-shadow: 0px 6px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.3);
 }
-
-.v-chip {
-  cursor: pointer;
+.close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: #000; /* Cambia el color si es necesario */
 }
 </style>

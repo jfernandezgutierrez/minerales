@@ -5,9 +5,14 @@ import "vuetify/styles";
 import { createRouter, createWebHistory } from "vue-router";
 import routes from "./routes";
 import { auth } from "./firebase";
+import '@mdi/font/css/materialdesignicons.css'
 
 const app = createApp(App);
-const vuetify = createVuetify();
+const vuetify = createVuetify({
+  icons: {
+    defaultSet: 'mdi', // Asegúrate de que use Material Design Icons
+  },
+});
 const router = createRouter({
   history: createWebHistory(),
   routes,
